@@ -27,12 +27,12 @@
     }
 
 
-    var test = new AdventOfCode2023.Day1();
-    var name = test.GetType().Name;
+    var test = new AdventOfCode2023.Day01();
+    var name = Path.Combine("2023", test.GetType().Name);
     string testFile;
-    testFile = name + "/Example.txt";
-    //testFile = name + "/input1";
-    //testFile = name + "/input2";
+    testFile = Path.Combine(name, "Example.txt");
+    //testFile = Path.Combine(name, "input1");
+    //testFile = Path.Combine(name, "input2");
 
     test.Run1(testFile);
     //test.Run2(testFile);
