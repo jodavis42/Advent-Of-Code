@@ -27,7 +27,7 @@
     }
 
 
-    var test = new AdventOfCode2023.Day01();
+    var test = new AdventOfCode2023.Day03();
     var name = Path.Combine("2023", test.GetType().Name);
     string testFile;
     testFile = Path.Combine(name, "Example.txt");
