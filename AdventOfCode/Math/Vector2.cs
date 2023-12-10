@@ -24,6 +24,10 @@ public struct Int2 : IEquatable<Int2>
   {
     return new Int2 { X = lhs.X - rhs.X, Y = lhs.Y - rhs.Y };
   }
+  public static Int2 operator -(Int2 self)
+  {
+    return new Int2 { X = -self.X, Y = -self.Y };
+  }
   public int LengthSq() => X * X + Y * Y;
   public void Normalize()
   {
