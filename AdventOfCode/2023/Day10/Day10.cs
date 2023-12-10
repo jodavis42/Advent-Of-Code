@@ -22,6 +22,15 @@ namespace AdventOfCode2023
     public void Run2(string filePath)
     {
       var lines = File.ReadAllLines(filePath);
+      Parse(lines);
+      BuildMasks();
+      var start = ComputeStart();
+      Console.WriteLine($"{start.X} {start.Y}");
+      ComputeStartTile(start);
+      Print();
+      Console.WriteLine();
+      var dGrid = Solve(start);
+      SolveLoop(dGrid);
     }
     Grid2d<char> Grid = new Grid2d<char>();
     void Parse(string[] lines)
@@ -45,16 +54,20 @@ namespace AdventOfCode2023
       }
       return new Int2();
     }
-    void Print()
+    void Print(Grid2d<char> grid)
     {
-      for (var y = 0; y < Grid.Height; ++y)
+      for (var y = 0; y < grid.Height; ++y)
       {
-        for (var x = 0; x < Grid.Width; ++x)
+        for (var x = 0; x < grid.Width; ++x)
         {
-          Console.Write(Grid[x, y]);
+          Console.Write(grid[x, y]);
         }
         Console.WriteLine();
       }
+    }
+    void Print()
+    {
+      Print(Grid);
     }
     enum Mask : uint
     {
@@ -159,7 +172,7 @@ namespace AdventOfCode2023
       var t1Connected = (GetMask(t1) & negDirMask) != 0;
       return t0Connected && t1Connected;
     }
-    void Solve(Int2 start)
+    Grid2d<uint> Solve(Int2 start)
     {
       var dGrid = new Grid2d<uint>();
       dGrid.Initialize(Grid.Width, Grid.Height, uint.MaxValue);
@@ -210,6 +223,54 @@ namespace AdventOfCode2023
         Console.WriteLine();
       }
       Console.WriteLine(maxDistance);
+      return dGrid;
+    }
+    void SolveLoop(Grid2d<uint> dGrid)
+    {
+      var lGrid = new Grid2d<char>();
+      lGrid.Initialize(Grid.Width, Grid.Height, '0');
+      for (var y = 0; y < Grid.Height; ++y)
+      {
+        for (var x = 0; x < Grid.Width; ++x)
+          lGrid[x, y] = Grid[x, y];
+      }
+      uint enclosedTiles = 0;
+      for (var y = 0; y < lGrid.Height; ++y)
+      {
+        for (var x = 0; x < lGrid.Width; ++x)
+        {
+          if (dGrid[x, y] != uint.MaxValue)
+            continue;
+
+          var crosses = CountCrosses(dGrid, new Int2(x, y), new Int2(1, 1));
+          if (crosses % 2 == 0)
+            lGrid[x, y] = 'O';
+          else
+          {
+            lGrid[x, y] = 'I';
+            ++enclosedTiles;
+          }
+        }
+      }
+      Print(lGrid);
+      Console.WriteLine(enclosedTiles);
+    }
+    public uint CountCrosses(Grid2d<uint> dGrid, Int2 position, Int2 direction)
+    {
+      uint crosses = 0;
+      while(Grid.IsValidPosition(position.X, position.Y))
+      {
+        var d = dGrid[position.X, position.Y];
+        var c = Grid[position.X, position.Y];
+        position += direction;
+        if (d == uint.MaxValue)
+          continue;
+        if (c == 'L' || c == '7')
+          continue;
+
+        ++crosses;
+      }
+      return crosses;
     }
   }
 }
