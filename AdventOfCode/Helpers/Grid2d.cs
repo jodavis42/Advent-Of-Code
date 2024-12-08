@@ -33,4 +33,14 @@
     get => Get(x, y);
     set => Set(x, y, value);
   }
+
+  public void Print()
+  {
+    for (var y = 0; y < Height; ++y)
+    {
+      for (var x = 0; x < Width; ++x)
+        Console.Write(this[x, y]);
+      Console.WriteLine();
+    }
+  }
 }

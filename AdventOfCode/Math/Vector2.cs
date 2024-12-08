@@ -28,6 +28,14 @@ public struct Int2 : IEquatable<Int2>
   {
     return new Int2 { X = -self.X, Y = -self.Y };
   }
+  public static Int2 operator *(Int2 lhs, int rhs)
+  {
+    return new Int2 { X = lhs.X * rhs, Y = lhs.Y * rhs };
+  }
+  public static Int2 operator *(int lhs, Int2 rhs)
+  {
+    return rhs * lhs;
+  }
   public int LengthSq() => X * X + Y * Y;
   public void Normalize()
   {
