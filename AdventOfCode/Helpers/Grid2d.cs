@@ -44,3 +44,36 @@
     }
   }
 }
+
+public static class GridUtils
+{
+  public static void Parse(this Grid2d<char> self, string[] lines, char defaultValue = '.')
+  {
+    self.Initialize(lines[0].Length, lines.Length, defaultValue);
+    for (var y = 0; y < self.Height; ++y)
+    {
+      for (var x = 0; x < self.Width; ++x)
+        self[x, y] = lines[y][x];
+    }
+  }
+  public static int DefaultCharToInt(char c)
+  {
+    return c - '0';
+  }
+  public static void Parse(this Grid2d<int> self, string[] lines, int defaultValue = -1)
+  {
+    self.Parse(lines, DefaultCharToInt, defaultValue);
+  }
+  public static void Parse(this Grid2d<int> self, string[] lines, Func<char, int> ToIntFunc, int defaultValue = -1)
+  {
+    self.Initialize(lines[0].Length, lines.Length, defaultValue);
+    for (var y = 0; y < self.Height; ++y)
+    {
+      for (var x = 0; x < self.Width; ++x)
+      {
+        var c = lines[y][x];
+        self[x, y] = DefaultCharToInt(c);
+      }
+    }
+  }
+}
