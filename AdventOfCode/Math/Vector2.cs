@@ -9,11 +9,28 @@ public struct Int2 : IEquatable<Int2>
     X = x;
     Y = y;
   }
+  public override string ToString()
+  {
+    return $"({X}, {Y})";
+  }
   public override bool Equals(object? obj)
   {
     return obj != null && obj is Int2 p && Equals(p);
   }
 
+  public int Get(int i) => i == 0 ? X : Y;
+  public void Set(int i, int value)
+  {
+    if (i == 0)
+      X = value;
+    else
+      Y = value;
+  }
+  public int this[int i]
+  {
+    get => Get(i);
+    set => Set(i, value);
+  }
   public bool Equals(Int2 other) => X == other.X && Y == other.Y;
   public override int GetHashCode() => HashCode.Combine(X.GetHashCode(), Y.GetHashCode());
   public static Int2 operator +(Int2 lhs, Int2 rhs)
