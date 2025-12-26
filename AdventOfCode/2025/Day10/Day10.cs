@@ -15,15 +15,17 @@ namespace AdventOfCode2025
       foreach(var machine in machines)
         Console.WriteLine(machine);
 
-      var graph = new SearchGraph();
+      var solver = new Solver();
       var sum = 0;
       foreach (var machine in machines)
       {
-        var node = graph.Run(machine);
-        Console.WriteLine("-----");
-        Console.WriteLine(node.Depth);
-        Console.WriteLine(graph.LogPath(node));
-        sum += node.Depth;
+        var state = solver.Solve(machine);
+        var minCount = int.MaxValue;
+        foreach (var solution in state.Solutions)
+          minCount = Math.Min(solution.Count, minCount);
+
+        Console.WriteLine(minCount);
+        sum += minCount;
       }
       Console.WriteLine(sum);
     }
@@ -32,15 +34,17 @@ namespace AdventOfCode2025
     {
       var lines = File.ReadAllLines(filePath);
       var machines = Parse(lines);
-      var graph = new SearchGraph();
-      var sum = 0;
+      var solver = new JoltageSolver();
+      Int64 sum = 0;
       foreach (var machine in machines)
       {
-        var count = graph.RunJoltage(machine);
+        var count = solver.Solve(machine);
+        Console.WriteLine(count);
         sum += count;
       }
       Console.WriteLine(sum);
     }
+    
     class Machine
     {
       public class ButtonWiringSchematic
@@ -109,297 +113,254 @@ namespace AdventOfCode2025
         }
       }
     }
-    class SearchGraph
+    class Solver
     {
-      public class Node : IComparable<Node>
+      Machine Machine;
+      public class State
       {
-        public int Depth = 0;
-        public UInt32 State = 0;
-        public Node? PreviousNode = null;
-        public Machine.ButtonWiringSchematic? Path = null;
-
-        int IComparable<Node>.CompareTo(Node? other)
+        public uint TargetState = 0;
+        public uint CurrentState = 0;
+        public List<Machine.ButtonWiringSchematic> SchematicStack = new List<Machine.ButtonWiringSchematic>();
+        public List<List<Machine.ButtonWiringSchematic>> Solutions = new List<List<Machine.ButtonWiringSchematic>>();
+        public void BuildState(List<char> lightDiagrams)
         {
-          return -Depth.CompareTo(other!.Depth);
+          TargetState = 0;
+          for(var i = 0; i < lightDiagrams.Count; ++i)
+          {
+            if (lightDiagrams[i] == '#')
+              TargetState |= 1u << i;
+          }
+        }
+        public void Push(Machine.ButtonWiringSchematic schematic)
+        {
+          CurrentState ^= schematic.ButtonsMask;
+          SchematicStack.Add(schematic);
+        }
+        public void Pop()
+        {
+          var last = SchematicStack[SchematicStack.Count - 1];
+          CurrentState ^= last.ButtonsMask;
+          SchematicStack.RemoveAt(SchematicStack.Count - 1);
+        }
+        public void CopySolution()
+        {
+          var solution = new List<Machine.ButtonWiringSchematic>();
+          foreach (var scehmatic in SchematicStack)
+            solution.Add(scehmatic);
+          Solutions.Add(solution);
         }
       }
-      public class JoltageNode : IComparable<JoltageNode>, IEquatable<JoltageNode>
+      
+
+      public State Solve(Machine machine)
       {
-        public int Depth = 0;
-        public List<int> Joltages = new List<int>();
-        public JoltageNode? PreviousNode = null;
-        public Machine.ButtonWiringSchematic? Path = null;
-        Machine Machine;
-        public JoltageNode(Machine machine, int depth)
-        {
-          Initialize(machine);
-          Depth = depth;
-          Machine = machine;
-        }
-        public JoltageNode(Machine machine, JoltageNode previousNode, Machine.ButtonWiringSchematic path)
-        {
-          Machine = machine;
-          PreviousNode = previousNode;
-          Path = path;
-          Depth = previousNode.Depth + 1;
-
-          foreach (var joltage in previousNode.Joltages)
-            Joltages.Add(joltage);
-          foreach(var button in path.Buttons)
-          {
-            ++Joltages[button];
-          }
-        }
-        public void Initialize(Machine machine)
-        {
-          foreach (var l in machine.LightDiagram)
-            Joltages.Add(0);
-        }
-        public bool IsComplete()
-        {
-          for(var i = 0; i < Joltages.Count; ++i)
-          {
-            if (Joltages[i] != Machine.JoltageRequirements[i])
-              return false;
-          }
-          return true;
-        }
-
-        int IComparable<JoltageNode>.CompareTo(JoltageNode? other)
-        {
-          return -Depth.CompareTo(other!.Depth);
-        }
-
-        bool IEquatable<JoltageNode>.Equals(JoltageNode? other)
-        {
-          return other != null ? Equals(other) : false;
-        }
-        public override bool Equals(object? obj)
-        {
-          return obj != null && obj is JoltageNode p && Equals(p);
-        }
-
-        public bool Equals(JoltageNode other)
-        {
-          if (other == null)
-            return false;
-          if (other.Joltages.Count != Joltages.Count)
-            return false;
-          for (var i = 0; i < Joltages.Count; ++i)
-          {
-            if (Joltages[i] != other.Joltages[i])
-              return false;
-          }
-          return true;
-        }
-        public override int GetHashCode()
-        {
-          var code = 0;
-          foreach (var joltage in Joltages)
-            code = HashCode.Combine(code, joltage);
-          return code;
-        }
+        return Solve(machine, Machine.LightDiagramBits);
       }
 
-      public Node? Run(Machine machine)
+      public State Solve(Machine machine, uint target)
       {
-        var nodeMap = new Dictionary<UInt32, Node>();
-        var nodeList = new List<Node>();
+        Machine = machine;
+        var schematics = Machine.ButtonWiringSchematics;
+        int Count = 1 << schematics.Count;
 
-        var root = new Node { Depth = 0, State = 0 };
-        nodeMap.Add(root.State, root);
-        nodeList.Add(root);
+        //var TargetState = Machine.LightDiagramBits;
+        var result = new State();
 
-        while (nodeList.Count > 0)
+        for (var schematicsMask = 0; schematicsMask < Count; ++schematicsMask)
         {
-          var node = nodeList[nodeList.Count - 1];
-          nodeList.RemoveAt(nodeList.Count - 1);
-
-          if (node.State == machine.LightDiagramBits)
-            return node;
-
-          var newNodes = new List<Node>();
-          foreach (var schematic in machine.ButtonWiringSchematics)
+          var state = 0u;
+          for (var j = 0; j < schematics.Count; ++j)
           {
-            var newState = node.State ^ schematic.ButtonsMask;
-            if (nodeMap.ContainsKey(newState))
-              continue;
-
-            var newNode = new Node { Depth = node.Depth + 1, State = newState, PreviousNode = node, Path = schematic};
-            if (newNode.State == machine.LightDiagramBits)
-              return newNode;
-
-            nodeMap.Add(newNode.State, newNode);
-            newNodes.Add(newNode);
-          }
-          nodeList.AddRange(newNodes);
-          nodeList.Sort();
-        }
-        return null;
-      }
-      class JoltageSolver
-      {
-        List<int> CurrentJoltages = new List<int>();
-        List<int> ButtonPresses = new List<int>();
-        List<Machine.ButtonWiringSchematic> ButtonWiringSchematics;
-        Machine Machine;
-        public int Run(Machine machine)
-        {
-          Machine = machine;
-          foreach (var joltage in machine.JoltageRequirements)
-            CurrentJoltages.Add(0);
-          foreach (var schematic in machine.ButtonWiringSchematics)
-            ButtonPresses.Add(0);
-          ButtonWiringSchematics = machine.ButtonWiringSchematics;
-          ButtonWiringSchematics.Sort(SortSchematics);
-          Run(0);
-
-          var count = 0;
-          for(var i = 0; i < ButtonPresses.Count; ++i)
-          {
-            count += ButtonPresses[i];
-            if(ButtonPresses[i] != 0)
+            if ((schematicsMask & (1 << j)) != 0)
             {
-              //Console.WriteLine($"{ButtonWiringSchematics[i]}: {ButtonPresses[i]}");
+              state ^= schematics[j].ButtonsMask;
             }
           }
-          return count;
-        }
-        bool Run(int schematicIndex)
-        {
-          if (schematicIndex >= ButtonPresses.Count)
-            return false;
 
-          var schematic = ButtonWiringSchematics[schematicIndex];
-
-
-          var count = ComputeMaxButtonPresses(schematic);
-          ApplySchematic(schematicIndex, schematic, count);
-
-          if (IsSolved())
-            return true;
-
-          while (ButtonPresses[schematicIndex] >= 0)
+          if (state == target)
           {
-            if (Run(schematicIndex + 1))
-              return true;
-            if (ButtonPresses[schematicIndex] == 0)
-              break;
-            ApplySchematic(schematicIndex, schematic, -1);
+            var solution = new List<Machine.ButtonWiringSchematic>();
+            for (var j = 0; j < schematics.Count; ++j)
+            {
+              if ((schematicsMask & (1 << j)) != 0)
+              {
+                solution.Add(schematics[j]);
+              }
+            }
+            result.Solutions.Add(solution);
           }
-          ButtonPresses[schematicIndex] = 0;
-
-          return false;
         }
-        int ComputeMaxButtonPresses(Machine.ButtonWiringSchematic schematic)
+        return result;
+      }
+    }
+    class JoltageSolver
+    {
+      Machine Machine;
+      Dictionary<uint, Solver.State> StateCache = new Dictionary<uint, Solver.State>();
+      Solver Solver = new Solver();
+      class Node
+      {
+        public string Name;
+        public Vector<int> TargetJoltage;
+        public Vector<int> TargetPattern;
+        public Int64 ButtonCount = 0;
+        public List<Edge> Edges = new List<Edge>();
+        public void Dump()
         {
-          var maxValue = int.MaxValue;
-          foreach (var buttonIndex in schematic.Buttons)
+          Console.WriteLine($"{Name} [label=\"{{{TargetJoltage} | {TargetPattern} | {ButtonCount}}}\"]");
+          foreach(var edge in Edges)
           {
-            var delta = Machine.JoltageRequirements[buttonIndex] - CurrentJoltages[buttonIndex];
-            maxValue = Math.Min(maxValue, delta);
+            Console.WriteLine($"{Name} -> {edge.To.Name} [label=\"{edge.ButtonPresses}\"]");
           }
-          return maxValue;
-        }
-        void ApplySchematic(int schematicIndex, Machine.ButtonWiringSchematic schematic, int count)
-        {
-          foreach (var buttonIndex in schematic.Buttons)
-          {
-            CurrentJoltages[buttonIndex] += count;
-          }
-
-          ButtonPresses[schematicIndex] += count;
-        }
-        bool IsSolved()
-        {
-          for(var i = 0; i < CurrentJoltages.Count; ++i)
-          {
-            if (Machine.JoltageRequirements[i] != CurrentJoltages[i])
-              return false;
-          }
-          return true;
-        }
-
-        static int SortSchematics(Machine.ButtonWiringSchematic a, Machine.ButtonWiringSchematic b)
-        {
-          return a.Buttons.Count.CompareTo(b.Buttons.Count);
+          //JoltageSolver.ToNodeName(TargetJoltage);
         }
       }
-      public int RunJoltage(Machine machine)
+      class Edge
       {
-        var solver = new JoltageSolver();
-        return solver.Run(machine);
+        public Vector<int> ButtonPresses;
+        public Vector<int> ResultJoltage;
+        public Node To;
       }
-
-      public JoltageNode? RunJoltageBruteForce(Machine machine)
+      
+      static string ToNodeName(Vector<int> vector)
       {
-        var nodeList = new List<JoltageNode>();
-        var nodeMap = new HashSet<JoltageNode>();
+        var builder = new StringBuilder();
+        builder.Append("\"");
+        for (var i = 0; i < vector.Count; ++i)
+          builder.Append($"{vector[i]}_");
+        builder.Append("\"");
+        return builder.ToString();
+      }
+      List<Node> Nodes = new List<Node>();
 
-        var root = new JoltageNode(machine, 0);
-        nodeList.Add(root);
+      //Dictionary<>
+      public Int64 Solve(Machine machine)
+      {
+        Machine = machine;
+        // Note: Could be optimized...
+        Nodes.Clear();
+        StateCache.Clear();
 
-        while (nodeList.Count > 0)
+        uint target = 0;
+        var joltages = new Vector<int>(Machine.JoltageRequirements.Count);
+        for (var i = 0; i < Machine.JoltageRequirements.Count; ++i)
         {
-          var node = nodeList[nodeList.Count - 1];
-          nodeList.RemoveAt(nodeList.Count - 1);
+          if (Machine.JoltageRequirements[i] % 2 == 1)
+            target |= 1u << i;
+          joltages[i] = Machine.JoltageRequirements[i];
+        }
 
-          if (node.IsComplete())
+        
+
+        var result = Solve(joltages);
+
+        //Console.WriteLine("digraph {");
+        //Console.WriteLine("node[shape = record]");
+        //foreach (var node in Nodes)
+        //  node.Dump();
+        //Console.WriteLine("}");
+
+        return result.ButtonCount;
+      }
+      Node Solve(Vector<int> joltages)
+      {
+        var node = new Node();
+        node.Name = Nodes.Count.ToString();
+        node.TargetJoltage = joltages;
+        node.ButtonCount = 0;
+        Nodes.Add(node);
+
+        bool baseCase = true;
+        for(var i = 0; i < joltages.Count; ++i)
+        {
+          if (joltages[i] != 0)
+            baseCase = false;
+        }
+
+        Vector<int> subJoltages = new Vector<int>(joltages.Count);
+        uint target = 0;
+        for (var i = 0; i < joltages.Count; ++i)
+        {
+          if (joltages[i] < 0)
+          {
+            node.ButtonCount = Int64.MaxValue;
             return node;
-
-          foreach (var schematic in machine.ButtonWiringSchematics)
-          {
-            var newNode = new JoltageNode(machine, node, schematic);
-            if (nodeMap.Contains(newNode))
-              continue;
-
-            if (newNode.IsComplete())
-              return newNode;
-
-            nodeMap.Add(newNode);
-            nodeList.Add(newNode);
           }
-          nodeList.Sort();
-        }
-        return null;
-      }
-      public string ToBinary(UInt32 data, int count = 32)
-      {
-        var builder = new StringBuilder();
-        builder.Append("0b");
-        for(var i = count - 1; i >= 0; --i)
-        {
-          UInt32 state = data & (1u << i);
-          if (state != 0)
-            builder.Append("1");
-          else
-            builder.Append("0");
-        }
-        return builder.ToString();
-      }
-      public string LogPath(Node? node)
-      {
-        List<Node> list = new List<Node>();
-        while(node != null)
-        {
-          list.Add(node);
-          node = node.PreviousNode;
+          if (joltages[i] % 2 == 1)
+          {
+            target |= 1u << i;
+            subJoltages[i] = 1;
+          }
         }
 
-        var builder = new StringBuilder();
-        UInt32 prevoiusState = 0;
-        for(var i = list.Count - 1; i >= 0; --i)
+        node.TargetPattern = subJoltages;
+
+        if (baseCase == true)
+          return node;
+
+        if (!StateCache.TryGetValue(target, out var state))
         {
-          var curNode = list[i];
-          if (curNode.Path == null)
-            builder.AppendLine($"{ToBinary(curNode.State)}");
-          else
-          {
-            builder.AppendLine($"{ToBinary(prevoiusState)} ^ {ToBinary(curNode.Path.ButtonsMask)} -> {ToBinary(curNode.State)}");
-          }
-          prevoiusState = curNode.State;
+          state = Solver.Solve(Machine, target);
+          StateCache.Add(target, state);
         }
-        return builder.ToString();
+
+        foreach(var solution in state.Solutions)
+        {
+          var builder = new StringBuilder();
+          foreach (var schematic in solution)
+            builder.Append(schematic.ToString());
+        }
+
+        Int64 min = Int64.MaxValue;
+        foreach (var solution in state.Solutions)
+        {
+          var builder = new StringBuilder();
+          foreach (var schematic in solution)
+            builder.Append(schematic.ToString());
+
+          var consumedJoltages = BuildVector(solution);
+          var newJoltages = (joltages - consumedJoltages) / 2;
+
+
+          var edge = new Edge();
+          edge.ResultJoltage = newJoltages;
+          edge.ButtonPresses = BuildButtonVector(solution);
+          
+          node.Edges.Add(edge);
+
+          var subNode = Solve(newJoltages);
+          edge.To = subNode;
+
+          if (subNode.ButtonCount == Int64.MaxValue)
+          {
+            continue;
+          }
+          var count = subNode.ButtonCount * 2 + solution.Count;
+          min = Math.Min(count, min);
+        }
+        node.ButtonCount = min;
+        return node;
+      }
+      Vector<int> BuildVector(List<Machine.ButtonWiringSchematic> schematics)
+      {
+        var result = new Vector<int>(Machine.JoltageRequirements.Count);
+        foreach(var schematic in schematics)
+        {
+          foreach (var i in schematic.Buttons)
+            ++result[i];
+        }
+        return result;
+      }
+      Vector<int> BuildButtonVector(List<Machine.ButtonWiringSchematic> schematics)
+      {
+        var result = new Vector<int>(Machine.ButtonWiringSchematics.Count);
+        for(var i = 0; i < Machine.ButtonWiringSchematics.Count; ++i)
+        {
+          var schematic = Machine.ButtonWiringSchematics[i];
+          if (schematics.IndexOf(schematic) != -1)
+            result[i] = 1;
+        }
+        return result;
       }
     }
     List<Machine> Parse(string[] lines)
